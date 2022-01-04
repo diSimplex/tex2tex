@@ -1,0 +1,27 @@
+[project]
+name = "tex2tex"
+version = "0.0.1"
+description = "A simple tool to transliterate TeX macros."
+authors = [
+    {name = "Stephen Gaito", email = "stephen@perceptisys.co.uk"},
+]
+dependencies = [
+    "pyyaml~=6.0",
+]
+requires-python = ">=3.9"
+dynamic = ["classifiers"]
+license = {text = "Apache-2.0"}
+
+[project.urls]
+homepage = "https://github.com/diSimplex/tex2tex"
+
+[project.scripts]
+tex2tex = "tex2tex:tex2tex"
+
+[project.optional-dependencies]
+[build-system]
+requires = ["pdm-pep517"]
+build-backend = "pdm.pep517.api"
+
+[tool]
+[tool.pdm]
