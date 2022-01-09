@@ -1,6 +1,6 @@
 # An example tex2tex remapping
 
-from tex2tex.dsl import macros as m
+from tex2tex.dsl import Macros as m
 from tex2tex.dsl import environments as e
 
 m.usebtxdataset(
@@ -15,7 +15,7 @@ m.diSimpEnvironment()
 
 m.diSimpComonent()
 
-env.diSimplexComponent(
+e.diSimplexComponent(
   numArgs=1
 )
 
@@ -40,4 +40,3 @@ e.itemize(
   close=']',
   numArgs=1
 )
-

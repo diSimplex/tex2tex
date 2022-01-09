@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# This bash script runs the tex2tex tests
+
+python -W "ignore::DeprecationWarning"          \
+  -m unittest discover -v -p '*_tests.py' tests

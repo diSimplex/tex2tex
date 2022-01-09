@@ -86,6 +86,7 @@ def loadConfig(cliArgs) :
 def loadMappings(config) :
   print("Hello from loadMappings")
   for aMappingDir in config['mappingDirs'] :
+    aMappingDir = aMappingDir.removesuffix('/')
     aPkgPath = aMappingDir.replace('/','.')
     if aMappingDir.startswith('tex2tex') :
       aMappingDir = os.path.join(os.path.dirname(__file__), aMappingDir.replace('tex2tex/', ''))
