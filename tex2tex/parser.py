@@ -1,3 +1,4 @@
+import yaml
 
 import re
 import sys
@@ -5,24 +6,35 @@ import sys
 from .dsl import macroNames
 
 class TokenAST() :
-  pass
+  def __init__(self, tokenValue) :
+    self.token = tokenValue
 
-class TokenWhiteSpace(TokenAST) :
-  pass
+  def tokenType(self) :
+    return "unknown"
+
+  def __str__(self) :
+    return "{}: [{}]\n".format(self.tokenType(), self.token)
+
+class TokenBackground(TokenAST) :
+  def tokenType(self) :
+    return "background"
 
 class TokenComment(TokenAST) :
-  pass
+  def tokenType(self) :
+    return "comment"
 
 class TokenCommand(TokenAST) :
-  pass
+  def tokenType(self) :
+    return "command"
 
 class TokenGroup(TokenAST) :
-  pass
+  def tokenType(self) :
+    return "group"
 
 ############################
 # regular expressions
 commentRegExp    = re.compile(r"\%[^\n]*")
-commandRegExp    = re.compile(r"\\[^\\\{\[\(\%\s]*")
+commandRegExp    = re.compile(r"\\[^\\\{\[\(\%\s]*|\\[\¬\`\!\"\£\$\%\^\&\*\(\)\-\_\+\=\:\;\@\'\~\#\<\,\>\.\?\/\|\\]")
 whiteSpaceRegExp = re.compile(r"\s*")
 wordRegExp       = re.compile(r"[^\\\{\[\(\%\s]*")
 backgroundRegExp = re.compile(r"[^\\\{\[\(\%]*")
@@ -35,55 +47,60 @@ groupEndMarkers = {
 }
 groupStartMarkers = list(groupEndMarkers.keys())
 
-class CharStream() :
-  def __init__(self, text='') :
-    self.text     = text
-    self.numChars = len(text)
+class ItemStream() :
+  def __init__(self, items=[]) :
+    self.items    = items
+    self.numItems = len(items)
     self.curIndex = 0
 
   def hasMore(self) :
-    return self.curIndex < self.numChars
+    return self.curIndex < self.numItems
 
-  def curChar(self) :
-    if self.numChars <= self.curIndex :
+  def curItem(self) :
+    if self.numItems <= self.curIndex :
       return None
-    return self.text[self.curIndex]
+    return self.items[self.curIndex]
 
-  def nextChar(self) :
-    print("nextChar[{}] '{}'->'{}'".format(
-      self.curIndex, self.text[self.curIndex], self.text[self.curIndex+1]
+  def nextItem(self) :
+    print("nextItem[{}] '{}'->'{}'".format(
+      self.curIndex, self.items[self.curIndex], self.items[self.curIndex+1]
     ))
-    if self.numChars <= self.curIndex :
+    if self.numItems <= self.curIndex :
       return None
-    aChar = self.text[self.curIndex]
+    anItem = self.items[self.curIndex]
     self.curIndex += 1
-    return aChar
+    return anItem
 
-  def previousChar(self) :
+  def previousItem(self) :
     if self.curIndex <= 0 :
       return None
     self.curIndex -= 1
-    return self.text[self.curIndex]
+    return self.items[self.curIndex]
+
+class CharStream(ItemStream) :
+  def __init__(self, text) :
+    super(CharStream, self).__init__(text)
+    self.tokens = TokenStream()
 
   def scanTokens(self) :
-    curChar = self.curChar()
+    curChar = self.curItem()
     while curChar :
-      print("\ncurChar: [{}]".format(curChar))
+      #print("\ncurChar: [{}]".format(curChar))
       if curChar == "%" :
-        self.scanUsingRegExp("comment", commentRegExp)
+        self.scanUsingRegExp("comment", commentRegExp, TokenComment)
       elif curChar == "\\" :
-        self.scanUsingRegExp("command", commandRegExp)
+        self.scanUsingRegExp("command", commandRegExp, TokenCommand)
       elif curChar in groupStartMarkers :
         self.scanGroup(curChar, groupEndMarks(curChar))
-      elif self.text.startswith('\\bgroup', self.curIndex) :
+      elif self.items.startswith('\\bgroup', self.curIndex) :
         self.scanGroup('\\bgroup', '\\egroup')
       else :
-        self.scanUsingRegExp("background", backgroundRegExp)
-      curChar = self.curChar()
+        self.scanUsingRegExp("background", backgroundRegExp, TokenBackground)
+      curChar = self.curItem()
 
   def reportCurChar(self, msg) :
     print("{} text[{}] = '{}'".format(
-      msg, self.curIndex, self.text[self.curIndex]
+      msg, self.curIndex, self.items[self.curIndex]
     ))
 
   def reportFailure(self, tokenType) :
@@ -92,23 +109,25 @@ class CharStream() :
     reportStart = self.curIndex - 10
     if reportStart < 0 : reportStart = 0
     reportEnd   = self.curIndex + 10
-    if self.numChars <= reportEnd : reportEnd   = self.numChars - 1
-    print("  [{}]".format(self.text[reportStart:reportEnd]))
+    if self.numItems <= reportEnd : reportEnd   = self.numItems - 1
+    print("  [{}]".format(self.items[reportStart:reportEnd]))
     sys.exit(-1)
 
   def reportStr(self, tokenType, strStart, strEnd) :
     print("{} start: {} end: {}".format(tokenType, strStart, strEnd))
-    print("[{}]".format(self.text[strStart:strEnd]))
+    print("[{}]".format(self.items[strStart:strEnd]))
 
-  def scanUsingRegExp(self, tokenType, tokenRegExp) :
-    self.reportCurChar("looking for {} at".format(tokenType))
+  def scanUsingRegExp(self, tokenType, tokenRegExp, tokenCls) :
+    #self.reportCurChar("looking for {} at".format(tokenType))
     tokenStart = self.curIndex
-    aMatch = tokenRegExp.match(self.text, self.curIndex)
+    aMatch = tokenRegExp.match(self.items, self.curIndex)
     if not aMatch : self.reportFailure(tokenType)
-    print(aMatch)
     tokenEnd = aMatch.end()
     self.curIndex = tokenEnd
-    self.reportStr(tokenType, tokenStart, tokenEnd)
+    theToken = object.__new__(tokenCls)
+    theToken.__init__(self.items[tokenStart:tokenEnd])
+    self.tokens.addToken(theToken)
+    #self.reportStr(tokenType, tokenStart, tokenEnd)
 
   def scanGroup(self, groupStart, groupEnd) :
     self.reportCurChar("looking for '{}'/'{}' group at".format(
@@ -122,3 +141,15 @@ class CharStream() :
 
   def scanWord(self) :
     self.scanUsingRegExp("word", wordRegExp)
+
+class TokenStream(ItemStream) :
+
+  def addToken(self, aToken) :
+    self.items.append(aToken)
+
+  def dumpTokens(self) :
+    print("----------------------------------------------------")
+    for aToken in self.items :
+      print(aToken)
+    print("----------------------------------------------------")
+

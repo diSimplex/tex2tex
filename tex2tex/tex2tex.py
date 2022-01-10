@@ -20,4 +20,6 @@ Until the end!
 
   cStream.scanTokens()
 
+  cStream.tokens.dumpTokens()
+
   print("Done!")
