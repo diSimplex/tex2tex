@@ -27,25 +27,22 @@ class TokenCommand(TokenAST) :
   def tokenType(self) :
     return "command"
 
-class TokenGroup(TokenAST) :
+class TokenStartGroup(TokenAST) :
   def tokenType(self) :
-    return "group"
+    return "startGroup"
+
+class TokenEndGroup(TokenAST) :
+  def tokenType(self) :
+    return "endGroup"
 
 ############################
 # regular expressions
 commentRegExp    = re.compile(r"\%[^\n]*")
 commandRegExp    = re.compile(r"\\[^\\\{\[\(\%\s]*|\\[\¬\`\!\"\£\$\%\^\&\*\(\)\-\_\+\=\:\;\@\'\~\#\<\,\>\.\?\/\|\\]")
-whiteSpaceRegExp = re.compile(r"\s*")
-wordRegExp       = re.compile(r"[^\\\{\[\(\%\s]*")
-backgroundRegExp = re.compile(r"[^\\\{\[\(\%]*")
+backgroundRegExp = re.compile(r"[^\\\{\}\[\]\(\)\%]*")
 
-groupEndMarkers = {
-  '[' : ']',
-  '{' : '}',
-  '(' : ')',
-  '\\bgroup' : '\\egroup'
-}
-groupStartMarkers = list(groupEndMarkers.keys())
+startGroupMarkers = [ "[", "(", "{" ]
+endGroupMarkers   = [ "}", ")", "]" ]
 
 class ItemStream() :
   def __init__(self, items=[]) :
@@ -90,10 +87,12 @@ class CharStream(ItemStream) :
         self.scanUsingRegExp("comment", commentRegExp, TokenComment)
       elif curChar == "\\" :
         self.scanUsingRegExp("command", commandRegExp, TokenCommand)
-      elif curChar in groupStartMarkers :
-        self.scanGroup(curChar, groupEndMarks(curChar))
-      elif self.items.startswith('\\bgroup', self.curIndex) :
-        self.scanGroup('\\bgroup', '\\egroup')
+      elif curChar in startGroupMarkers :
+        self.tokens.addToken(TokenStartGroup(curChar))
+        self.curIndex += 1
+      elif curChar in endGroupMarkers :
+        self.tokens.addToken(TokenEndGroup(curChar))
+        self.curIndex += 1
       else :
         self.scanUsingRegExp("background", backgroundRegExp, TokenBackground)
       curChar = self.curItem()
@@ -135,12 +134,6 @@ class CharStream(ItemStream) :
     ))
     #self.reportStr('group', groupStart, groupEnd)
     pass
-
-  def scanWhiteSpace(self) :
-    self.scanUsingRegExp("whiteSpace", whiteSpaceRegExp)
-
-  def scanWord(self) :
-    self.scanUsingRegExp("word", wordRegExp)
 
 class TokenStream(ItemStream) :
 
