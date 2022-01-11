@@ -5,7 +5,7 @@ import sys
 
 from .dsl import macroNames
 
-class TokenAST() :
+class TokenBase() :
   def __init__(self, tokenValue) :
     self.token = tokenValue
 
@@ -15,23 +15,23 @@ class TokenAST() :
   def __str__(self) :
     return "{}: [{}]\n".format(self.tokenType(), self.token)
 
-class TokenBackground(TokenAST) :
+class TokenBackground(TokenBase) :
   def tokenType(self) :
     return "background"
 
-class TokenComment(TokenAST) :
+class TokenComment(TokenBase) :
   def tokenType(self) :
     return "comment"
 
-class TokenCommand(TokenAST) :
+class TokenCommand(TokenBase) :
   def tokenType(self) :
     return "command"
 
-class TokenStartGroup(TokenAST) :
+class TokenStartGroup(TokenBase) :
   def tokenType(self) :
     return "startGroup"
 
-class TokenEndGroup(TokenAST) :
+class TokenEndGroup(TokenBase) :
   def tokenType(self) :
     return "endGroup"
 
@@ -41,8 +41,18 @@ commentRegExp    = re.compile(r"\%[^\n]*")
 commandRegExp    = re.compile(r"\\[^\\\{\[\(\%\s]*|\\[\¬\`\!\"\£\$\%\^\&\*\(\)\-\_\+\=\:\;\@\'\~\#\<\,\>\.\?\/\|\\]")
 backgroundRegExp = re.compile(r"[^\\\{\}\[\]\(\)\%]*")
 
+bGroupMarker = '\\bgroup'
 startGroupMarkers = [ "[", "(", "{" ]
+
+eGroupMarker = '\\egroup'
 endGroupMarkers   = [ "}", ")", "]" ]
+
+start2endGroupMapping = {
+  bGroupMarker : eGroupMarker,
+  "[" : "]",
+  "(" : ")",
+  "{" : "}"
+}
 
 class ItemStream() :
   def __init__(self, items=[]) :
@@ -86,7 +96,13 @@ class CharStream(ItemStream) :
       if curChar == "%" :
         self.scanUsingRegExp("comment", commentRegExp, TokenComment)
       elif curChar == "\\" :
-        self.scanUsingRegExp("command", commandRegExp, TokenCommand)
+        if self.items.startswith('\\bgroup') :
+          self.tokens.addToken(TokenStartGroup('\\bgroup'))
+          self.curIndex += len('\\bgroup')
+        elif self.items.startswith('\\egroup') :
+          self.tokens.addToken(TokenStartGroup('\\bgroup'))
+        else :
+          self.scanUsingRegExp("command", commandRegExp, TokenCommand)
       elif curChar in startGroupMarkers :
         self.tokens.addToken(TokenStartGroup(curChar))
         self.curIndex += 1
@@ -149,3 +165,117 @@ class TokenStream(ItemStream) :
       print(aToken)
     print("----------------------------------------------------")
 
+class ASTSequence() :
+  def __init__(self) :
+    self.items = []
+
+  def addToken(self, aToken) :
+    self.items.append(aToken)
+
+class ASTCommand() :
+  def __init__(self, aCommand) :
+    self.command  = aCommand
+    self.optArgs  = None
+    self.reqArgs  = None
+    self.sequence = None
+    self.macroDef = None
+
+  def addArguments(self, tSeq, optArgs, reqArgs) :
+    self.sequence = tSeq
+    self.optArgs  = optArgs
+    self.reqArgs  = reqArgs
+
+class ASTGroup() :
+  def __init__(self, startToken) :
+    self.startToken = startToken
+    self.endToken   = start2endGroupMapping[startToken]
+    self.sequence   = ASTSequence()
+
+  def addToken(self, aToken) :
+    self.sequence.addToken(aToken)
+
+class NotEnoughArgumentsFound() :
+  def __init__(self, numArgFound, numArgsExpected, areOptional, tokens) :
+    self.numArgFound     = numArgFound
+    self.numArgsExpected = numArgsExpected
+    self.areOptional     = areOptional
+    self.tokens          = tokens
+
+  def __str__(self) :
+    optWord = ""
+    if self.areOptional : optWord = "optional "
+    print("Not enough {}arguments found while parsing TeX file".format(optWord))
+    print(" expected: {}".format(self.numArgsExpected))
+    print("    found: {}".format(self.numArgsFound))
+    print(" while reading: [{}]".format("".join(tokens)))
+
+class NoEndGroupFound() :
+  def __init__(self, endGroupToken, tokens) :
+    self.endGroupToken = endGroupToken
+    self.tokens        = tokens
+
+  def __str__(self) :
+    print("No end group found while parsing TeX file")
+    print(" expected: {}".format(self.endGroupToken))
+    print(" while reading: [{}]".format("".join(tokens)))
+
+def buildCommand(aCommand, tokens) :
+  tCmd = ASTCommand(aCommand)
+  if aCommand.token not in macroNames : return tCmd
+
+  macroDef = macroNames[aCommand.token]
+  tCmd.macroDef = macroDef
+
+  if macroDef.numOptArgs + macroDef.numReqArgs < 1 : return tCmd
+
+  tCmd.addArguments(buildSequence(
+    macroDef.numOptArgs, macroDef.numReqArgs, tokens
+  ))
+
+  return tCmd
+
+def buildGroup(startToken, tokens) :
+  endGroup = start2endGroupMappiing[startToken.token]
+  (tSeq, optArgs, reqArgs) = buildSequence(
+    None, None, endGroup, tokens
+  )
+  return tSeq
+
+def buildInnerSequence(tSeq, numArgs, areOptional, endGroup, tokens) :
+  theArgs = []
+  while 0 < len(tokens) :
+    if endGroup is None and   \
+      numArgs is not None and \
+      numArgs <= len(theArgs) :
+      return theArgs
+    curToken = tokens.pop(0)
+    if isinstance(curToken, TokenCommand) :
+      tSeq.addToken(buildCommand(curToken, tokens))
+    elif isInstance(curToken, TokenStartGroup) :
+      if areOptional and curToken.token != '[' :
+        tokens.insert(0, curToken)
+        return theArgs
+      tSeq.addToken(buildGroup(curToken, tokens))
+      numArgs.append(len(tSeq.items))
+    elif isInstance(curToken, TokenEndGroup) :
+      if endGroup is not None and curToken.token == endGroup :
+        if not areOptional and    \
+          numArgs is not None and \
+          len(theArgs) < numArgs  :
+          raise NotEnoughArgumentsFound(len(theArgs), numArgs, areOptional)
+        return theArgs
+    else :
+      tSeq.addToken(curToken)
+  if endGroup is not None : raise NoEndGroupFound(endGroup)
+  if not areOptional and    \
+    numArgs is not None and \
+    len(theArgs) < numArgs  :
+    raise NotEnoughArgumentsFound(len(theArgs), numArgs, areOptional)
+  return theArgs
+
+def buildSequence(numOptArgs, numReqArgs, endGroup, tokens) :
+  tSeq = ASTSequence()
+
+  optArgs = buildInnerSequence(tSeq, numOptArgs, True,  endGroup, tokens)
+  reqArgs = buildInnerSequence(tSeq, numReqArgs, False, endGroup, tokens)
+  return (tSeq, optArgs, reqArgs)
