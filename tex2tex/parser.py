@@ -144,6 +144,9 @@ class CharStream(ItemStream) :
 
 class TokenStream(ItemStream) :
 
+  def __init__(self) :
+    super().__init__([])
+
   def addToken(self, aToken) :
     self.items.append(aToken)
 
