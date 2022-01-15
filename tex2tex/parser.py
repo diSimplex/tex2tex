@@ -27,6 +27,10 @@ class TokenCommand(TokenBase) :
   def tokenType(self) :
     return "command"
 
+class TokenWord(TokenBase) :
+  def tokenType(self) :
+    return "word"
+
 class TokenStartGroup(TokenBase) :
   def tokenType(self) :
     return "startGroup"
@@ -38,8 +42,11 @@ class TokenEndGroup(TokenBase) :
 ############################
 # regular expressions
 commentRegExp    = re.compile(r"\%[^\n]*")
-commandRegExp    = re.compile(r"\\[^\\\{\[\(\%\s]*|\\[\¬\`\!\"\£\$\%\^\&\*\(\)\-\_\+\=\:\;\@\'\~\#\<\,\>\.\?\/\|\\]")
+commandRegExp    = re.compile(r"\\[^\\\{\[\(\%\s]+|\\[ \¬\`\!\"\£\$\%\^\&\*\(\)\-\_\+\=\:\;\@\'\~\#\<\,\>\.\?\/\|\\]")
 backgroundRegExp = re.compile(r"[^\\\{\}\[\]\(\)\%]*")
+
+backgroundWordRegExp       = re.compile(r"\S+")
+backgroundWhiteSpaceRegExp = re.compile(r"\s+")
 
 bGroupMarker = '\\bgroup'
 startGroupMarkers = [ "[", "(", "{" ]
@@ -217,14 +224,26 @@ class NoEndGroupFound(Exception) :
       " while reading: [{}]".format("".join(self.tokens))
     ])
 
+class NoBackgroundWordFound(Exception) :
+  def __init__(self, theToken, tokens) :
+    self.theToken = theToken
+    self.tokens   = tokens
+
+  def __str__(self) :
+    return "\n".join([
+      "\nNo background word found while parsing TeX file (should NOT get here!)",
+      " the remaining background token: '{}'".format(self.theToken),
+      " while reading: [{}]".format("".join(self.tokens))
+    ])
+
 def buildCommand(aCommand, tokens) :
   tCmd = ASTCommand(aCommand)
-  print("found command [{}]".format(aCommand))
+  #print("found command [{}]".format(aCommand))
   if aCommand.token not in macroNames : return tCmd
 
   macroDef = macroNames[aCommand.token]
   tCmd.macroDef = macroDef
-  print(yaml.dump(macroDef))
+  #print(yaml.dump(macroDef))
   numOptArgs = 0
   if 'numOptArgs' in macroDef and       \
     macroDef['numOptArgs'] is not None  \
@@ -235,9 +254,7 @@ def buildCommand(aCommand, tokens) :
     : numReqArgs = macroDef['numReqArgs']
   if numOptArgs + numReqArgs < 1 : return tCmd
 
-  tCmd.addArguments(buildSequence(
-    macroDef['numOptArgs'], macroDef['numReqArgs'], None, tokens
-  ))
+  tCmd.addArguments(*buildSequence(numOptArgs, numReqArgs, None, tokens))
 
   return tCmd
 
@@ -267,22 +284,42 @@ def buildInnerSequence(tSeq, numArgs, areOptional, endGroup, tokens) :
         if not areOptional and    \
           numArgs is not None and \
           len(theArgs) < numArgs  :
-          raise NotEnoughArgumentsFound(len(theArgs), numArgs, areOptional)
+          raise NotEnoughArgumentsFound(len(theArgs), numArgs, areOptional, tokens)
         return theArgs
+    elif isinstance(curToken, TokenBackground) :
+      while not areOptional and numArgs is not None and \
+        len(theArgs) < numArgs :
+        theToken = curToken.token
+        aBackgroundWordMatch = backgroundWordRegExp.search(theToken)
+        if not aBackgroundWordMatch : break
+        someWhiteSpace = backgroundWhiteSpaceRegExp.match(theToken)
+        if someWhiteSpace :
+          tSeq.addToken(TokenBackground(
+            theToken[someWhiteSpace.start():someWhiteSpace.end()]
+          ))
+          theToken = theToken[someWhiteSpace.end() : len(theToken)]
+        theWord = backgroundWordRegExp.match(theToken)
+        if theWord :
+          tSeq.addToken(TokenWord(theToken[theWord.start():theWord.end()]))
+          theArgs.append(len(tSeq.items))
+          theToken = theToken[theWord.end() : len(theToken)]
+        else : raise NoBackgroundWordFound(theToken, tokens)
+        curToken.token = theToken
+      tSeq.addToken(curToken)
     else :
       tSeq.addToken(curToken)
   if endGroup is not None : raise NoEndGroupFound(endGroup, tokens)
   if not areOptional and    \
     numArgs is not None and \
     len(theArgs) < numArgs  :
-    raise NotEnoughArgumentsFound(len(theArgs), numArgs, areOptional)
+    raise NotEnoughArgumentsFound(len(theArgs), numArgs, areOptional, tokens)
   return theArgs
 
 def buildSequence(numOptArgs, numReqArgs, endGroup, tokens) :
   tSeq = ASTSequence()
 
   optArgs = []
-  if numOptArgs is not None :
+  if numOptArgs is not None and 0 < numOptArgs :
     optArgs = buildInnerSequence(tSeq, numOptArgs, True,  endGroup, tokens)
   reqArgs = buildInnerSequence(tSeq, numReqArgs, False, endGroup, tokens)
   return (tSeq, optArgs, reqArgs)
