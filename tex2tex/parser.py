@@ -96,11 +96,12 @@ class CharStream(ItemStream) :
       if curChar == "%" :
         self.scanUsingRegExp("comment", commentRegExp, TokenComment)
       elif curChar == "\\" :
-        if self.items.startswith('\\bgroup') :
-          self.tokens.addToken(TokenStartGroup('\\bgroup'))
-          self.curIndex += len('\\bgroup')
-        elif self.items.startswith('\\egroup') :
-          self.tokens.addToken(TokenStartGroup('\\bgroup'))
+        if self.items.startswith(bGroupMarker, self.curIndex) :
+          self.tokens.addToken(TokenStartGroup(bGroupMarker))
+          self.curIndex += len(bGroupMarker)
+        elif self.items.startswith(eGroupMarker, self.curIndex) :
+          self.tokens.addToken(TokenEndGroup(eGroupMarker))
+          self.curIndex += len(eGroupMarker)
         else :
           self.scanUsingRegExp("command", commandRegExp, TokenCommand)
       elif curChar in startGroupMarkers :
@@ -143,13 +144,6 @@ class CharStream(ItemStream) :
     theToken.__init__(self.items[tokenStart:tokenEnd])
     self.tokens.addToken(theToken)
     #self.reportStr(tokenType, tokenStart, tokenEnd)
-
-  def scanGroup(self, groupStart, groupEnd) :
-    self.reportCurChar("looking for '{}'/'{}' group at".format(
-      groupStart, groupEnd
-    ))
-    #self.reportStr('group', groupStart, groupEnd)
-    pass
 
 class TokenStream(ItemStream) :
 
@@ -194,7 +188,7 @@ class ASTGroup() :
   def addToken(self, aToken) :
     self.sequence.addToken(aToken)
 
-class NotEnoughArgumentsFound() :
+class NotEnoughArgumentsFound(Exception) :
   def __init__(self, numArgFound, numArgsExpected, areOptional, tokens) :
     self.numArgFound     = numArgFound
     self.numArgsExpected = numArgsExpected
@@ -204,41 +198,52 @@ class NotEnoughArgumentsFound() :
   def __str__(self) :
     optWord = ""
     if self.areOptional : optWord = "optional "
-    print("Not enough {}arguments found while parsing TeX file".format(optWord))
-    print(" expected: {}".format(self.numArgsExpected))
-    print("    found: {}".format(self.numArgsFound))
-    print(" while reading: [{}]".format("".join(tokens)))
+    return "\n".join([
+      "\nNot enough {}arguments found while parsing TeX file".format(optWord),
+      " expected: {}".format(self.numArgsExpected),
+      "    found: {}".format(self.numArgsFound),
+      " while reading: [{}]".format("".join(self.tokens))
+    ])
 
-class NoEndGroupFound() :
+class NoEndGroupFound(Exception) :
   def __init__(self, endGroupToken, tokens) :
     self.endGroupToken = endGroupToken
     self.tokens        = tokens
 
   def __str__(self) :
-    print("No end group found while parsing TeX file")
-    print(" expected: {}".format(self.endGroupToken))
-    print(" while reading: [{}]".format("".join(tokens)))
+    return "\n".join([
+      "\nNo end group found while parsing TeX file",
+      " expected: '{}'".format(self.endGroupToken),
+      " while reading: [{}]".format("".join(self.tokens))
+    ])
 
 def buildCommand(aCommand, tokens) :
   tCmd = ASTCommand(aCommand)
+  print("found command [{}]".format(aCommand))
   if aCommand.token not in macroNames : return tCmd
 
   macroDef = macroNames[aCommand.token]
   tCmd.macroDef = macroDef
-
-  if macroDef.numOptArgs + macroDef.numReqArgs < 1 : return tCmd
+  print(yaml.dump(macroDef))
+  numOptArgs = 0
+  if 'numOptArgs' in macroDef and       \
+    macroDef['numOptArgs'] is not None  \
+    : numOptArgs = macroDef['numOptArgs']
+  numReqArgs = 0
+  if 'numReqArgs' in macroDef and       \
+    macroDef['numReqArgs'] is not None  \
+    : numReqArgs = macroDef['numReqArgs']
+  if numOptArgs + numReqArgs < 1 : return tCmd
 
   tCmd.addArguments(buildSequence(
-    macroDef.numOptArgs, macroDef.numReqArgs, tokens
+    macroDef['numOptArgs'], macroDef['numReqArgs'], None, tokens
   ))
 
   return tCmd
 
 def buildGroup(startToken, tokens) :
-  endGroup = start2endGroupMappiing[startToken.token]
-  (tSeq, optArgs, reqArgs) = buildSequence(
-    None, None, endGroup, tokens
-  )
+  endGroup = start2endGroupMapping[startToken.token]
+  (tSeq, optArgs, reqArgs) = buildSequence(None, None, endGroup, tokens)
   return tSeq
 
 def buildInnerSequence(tSeq, numArgs, areOptional, endGroup, tokens) :
@@ -251,13 +256,13 @@ def buildInnerSequence(tSeq, numArgs, areOptional, endGroup, tokens) :
     curToken = tokens.pop(0)
     if isinstance(curToken, TokenCommand) :
       tSeq.addToken(buildCommand(curToken, tokens))
-    elif isInstance(curToken, TokenStartGroup) :
+    elif isinstance(curToken, TokenStartGroup) :
       if areOptional and curToken.token != '[' :
         tokens.insert(0, curToken)
         return theArgs
       tSeq.addToken(buildGroup(curToken, tokens))
-      numArgs.append(len(tSeq.items))
-    elif isInstance(curToken, TokenEndGroup) :
+      theArgs.append(len(tSeq.items))
+    elif isinstance(curToken, TokenEndGroup) :
       if endGroup is not None and curToken.token == endGroup :
         if not areOptional and    \
           numArgs is not None and \
@@ -266,7 +271,7 @@ def buildInnerSequence(tSeq, numArgs, areOptional, endGroup, tokens) :
         return theArgs
     else :
       tSeq.addToken(curToken)
-  if endGroup is not None : raise NoEndGroupFound(endGroup)
+  if endGroup is not None : raise NoEndGroupFound(endGroup, tokens)
   if not areOptional and    \
     numArgs is not None and \
     len(theArgs) < numArgs  :
@@ -276,6 +281,12 @@ def buildInnerSequence(tSeq, numArgs, areOptional, endGroup, tokens) :
 def buildSequence(numOptArgs, numReqArgs, endGroup, tokens) :
   tSeq = ASTSequence()
 
-  optArgs = buildInnerSequence(tSeq, numOptArgs, True,  endGroup, tokens)
+  optArgs = []
+  if numOptArgs is not None :
+    optArgs = buildInnerSequence(tSeq, numOptArgs, True,  endGroup, tokens)
   reqArgs = buildInnerSequence(tSeq, numReqArgs, False, endGroup, tokens)
   return (tSeq, optArgs, reqArgs)
+
+def buildAST(tokens) :
+  (tSeq, optArgs, reqArgs) = buildSequence(None, None, None, tokens)
+  return tSeq

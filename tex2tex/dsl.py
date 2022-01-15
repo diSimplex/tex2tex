@@ -9,35 +9,38 @@ macroNames = { }
 
 def addMacro(
   name,
-  open=None, close=None, numArgs=0
+  open=None, close=None, numOptArgs=None, numReqArgs=None
 ) :
+  name = '\\'+name
   if name in macroNames :
     print("Redefining the existing macro {} : new definition ignored".format(name))
   else :
     macroNames[name] = {
-      'type'    : 'macro',
-      'name'    : name,
-      'open'    : open,
-      'close'   : close,
-      'numArgs' : numArgs
+      'type'       : 'macro',
+      'name'       : name,
+      'open'       : open,
+      'close'      : close,
+      'numOptArgs' : numOptArgs,
+      'numReqArgs' : numReqArgs,
     }
 
 def addEnvironment(
   name,
-  open=None, close=None, numArgs=0,
+  open=None, close=None, numOptArgs=None, numReqArgs=None,
   start=None, stop=None, begin=None, end=None
 ) :
   if name in macroNames :
     print("Redefining the existing environment {} : new definition ignored".format(name))
   else :
     macroNames[name] = {
-      'type'    : 'environment',
-      'name'    : name,
-      'numArgs' : numArgs,
-      'start'   : start,
-      'stop'    : stop,
-      'begin'   : begin,
-      'end'     : end
+      'type'       : 'environment',
+      'name'       : name,
+      'numOptArgs' : numOptArgs,
+      'numReqArgs' : numReqArgs,
+      'start'      : start,
+      'stop'       : stop,
+      'begin'      : begin,
+      'end'        : end
     }
 
 class MacrosType(type) :
@@ -55,5 +58,5 @@ class EnvironmentsType(type) :
       addEnvironment(name, **kwargs)
     return wrapper_environment
 
-class environments(metaclass=EnvironmentsType) :
+class Environments(metaclass=EnvironmentsType) :
   pass

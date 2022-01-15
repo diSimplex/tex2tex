@@ -4,7 +4,7 @@ from tex2tex.parser import CharStream, \
   TokenBackground, TokenComment, TokenCommand, \
   TokenStartGroup, TokenEndGroup
 
-class TestParser(unittest.TestCase) :
+class TestParserTokens(unittest.TestCase) :
 
   def test_background(self) :
     text = """

@@ -1,7 +1,7 @@
 # An example tex2tex remapping
 
 from tex2tex.dsl import Macros as m
-from tex2tex.dsl import environments as e
+from tex2tex.dsl import Environments as e
 
 m.usebtxdataset(
   open='[',
