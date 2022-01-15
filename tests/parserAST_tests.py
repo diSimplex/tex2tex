@@ -1,10 +1,11 @@
+import io
 import unittest
 import yaml
 
 from tex2tex.parser import CharStream,         \
   TokenBackground, TokenComment, TokenCommand, \
   TokenWord, TokenStartGroup, TokenEndGroup,   \
-  ASTSequence, ASTCommand, buildAST
+  ASTSequence, ASTGroup, ASTCommand, buildAST
 
 from tex2tex.dsl import Macros as m
 from tex2tex.dsl import Environments as e
@@ -80,8 +81,8 @@ class TestParserAST(unittest.TestCase) :
     t.assertEqual(len(items), 5)
     aGroup = items[3]
     t.assertIsNotNone(anAST)
-    t.assertIsInstance(aGroup, ASTSequence)
-    gItems = aGroup.items
+    t.assertIsInstance(aGroup, ASTGroup)
+    gItems = aGroup.sequence.items
     t.assertIsInstance(gItems, list)
     t.assertEqual(len(gItems), 5)
     t.assertIsInstance(gItems[0], TokenBackground)
@@ -161,7 +162,7 @@ class TestParserAST(unittest.TestCase) :
     cSeq = items[1].sequence.items
     t.assertIsNotNone(cSeq)
     t.assertEqual(len(cSeq), 2)
-    gSeq = cSeq[1].items
+    gSeq = cSeq[1].sequence.items
     t.assertIsNotNone(gSeq)
     t.assertEqual(len(gSeq), 1)
     t.assertRegex(gSeq[0].token, "This is a required argument")
@@ -177,11 +178,11 @@ class TestParserAST(unittest.TestCase) :
     cSeq = items[3].sequence.items
     t.assertIsNotNone(cSeq)
     t.assertEqual(len(cSeq), 4)
-    gSeq = cSeq[1].items
+    gSeq = cSeq[1].sequence.items
     t.assertIsNotNone(gSeq)
     t.assertEqual(len(gSeq), 1)
     t.assertRegex(gSeq[0].token, "this is an optional argument")
-    gSeq = cSeq[3].items
+    gSeq = cSeq[3].sequence.items
     t.assertIsNotNone(gSeq)
     t.assertEqual(len(gSeq), 1)
     t.assertRegex(gSeq[0].token, "this is another required argument")
@@ -214,3 +215,29 @@ class TestParserAST(unittest.TestCase) :
     t.assertEqual(len(cSeq), 3)
     t.assertIsInstance(cSeq[1], TokenWord)
     t.assertRegex(cSeq[1].token, "argument")
+
+  def test_writeTeXtoFile(t) :
+    text = """
+    This is a \\testMacroOneReq
+    argument
+    This is a \\testMacro
+    {This is a required argument}
+    This is a \\testMacro
+    [this is an optional argument]
+    {this is another required argument}
+    This is the last line
+"""
+    cStream = CharStream(text)
+    cStream.scanTokens()
+    tStream = cStream.tokens
+    t.assertIsNotNone(tStream)
+    tokens = tStream.items
+    t.assertIsNotNone(tokens)
+    #print(yaml.dump(tokens))
+    anAST = buildAST(tokens)
+    print(yaml.dump(anAST))
+    aStrIO = io.StringIO()
+    anAST.writeTeXto(aStrIO)
+    texText = aStrIO.getvalue()
+    print(texText)
+    t.assertEqual(text, texText)

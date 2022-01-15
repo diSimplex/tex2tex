@@ -15,6 +15,9 @@ class TokenBase() :
   def __str__(self) :
     return "{}: [{}]\n".format(self.tokenType(), self.token)
 
+  def writeTeXto(self, aFile) :
+    aFile.write(self.token)
+
 class TokenBackground(TokenBase) :
   def tokenType(self) :
     return "background"
@@ -173,6 +176,10 @@ class ASTSequence() :
   def addToken(self, aToken) :
     self.items.append(aToken)
 
+  def writeTeXto(self, aFile) :
+    for anItem in self.items :
+      anItem.writeTeXto(aFile)
+
 class ASTCommand() :
   def __init__(self, aCommand) :
     self.command  = aCommand
@@ -186,14 +193,23 @@ class ASTCommand() :
     self.optArgs  = optArgs
     self.reqArgs  = reqArgs
 
+  def writeTeXto(self, aFile) :
+    self.command.writeTeXto(aFile)
+    self.sequence.writeTeXto(aFile)
+
 class ASTGroup() :
-  def __init__(self, startToken) :
+  def __init__(self, startToken, aSequence) :
     self.startToken = startToken
-    self.endToken   = start2endGroupMapping[startToken]
-    self.sequence   = ASTSequence()
+    self.endToken   = TokenEndGroup(start2endGroupMapping[startToken.token])
+    self.sequence   = aSequence
 
   def addToken(self, aToken) :
     self.sequence.addToken(aToken)
+
+  def writeTeXto(self, aFile) :
+    self.startToken.writeTeXto(aFile)
+    self.sequence.writeTeXto(aFile)
+    self.endToken.writeTeXto(aFile)
 
 class NotEnoughArgumentsFound(Exception) :
   def __init__(self, numArgFound, numArgsExpected, areOptional, tokens) :
@@ -261,7 +277,7 @@ def buildCommand(aCommand, tokens) :
 def buildGroup(startToken, tokens) :
   endGroup = start2endGroupMapping[startToken.token]
   (tSeq, optArgs, reqArgs) = buildSequence(None, None, endGroup, tokens)
-  return tSeq
+  return ASTGroup(startToken, tSeq)
 
 def buildInnerSequence(tSeq, numArgs, areOptional, endGroup, tokens) :
   theArgs = []
