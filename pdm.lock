@@ -5,8 +5,8 @@ requires_python = ">=3.6"
 summary = "YAML parser and emitter for Python"
 
 [metadata]
-lock_version = "3"
-content_hash = "sha256:71b7a4744c99e67bd0cb5109d30415a616376306cd81f9e97357e8bd81781730"
+lock_version = "3.1"
+content_hash = "sha256:3d5505a45f760d7325ef5cfbd119ccf4e06f082e5e66ec09e93134e20fd2351b"
 
 [metadata.files]
 "pyyaml 6.0" = [
