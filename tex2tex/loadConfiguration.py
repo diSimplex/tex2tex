@@ -15,11 +15,14 @@ def parseCliArgs() :
   argparser = argparse.ArgumentParser(
     description="A simple tool to transliterate TeX macros."
   )
-  argparser.add_argument("-c", "--config", action='append',
-    default=[], help="overlay configuration from file"
+  argparser.add_argument("-c", "--config", nargs='+',
+    default=None, help="overlay configuration from file"
   )
-  argparser.add_argument("-m", "--mappings", action='append',
-    default=[], help="add a directory of macro and environment mappings"
+  argparser.add_argument("-m", "--mappings", nargs='+',
+    default=None, help="add a directory of macro and environment mappings"
+  )
+  argparser.add_argument("-o", "--outputDir",
+    default=".latex", help="directory location of the output (default: .latex)"
   )
   argparser.add_argument("-v", "--verbose", default=False,
     action=argparse.BooleanOptionalAction,
@@ -28,6 +31,9 @@ def parseCliArgs() :
   argparser.add_argument("-d", "--debug", default=False,
     action=argparse.BooleanOptionalAction,
     help="provide debugging output"
+  )
+  argparser.add_argument("texFiles", nargs='+',
+    default=None, help="the TeXFiles to be processed"
   )
   return argparser.parse_args()
 
@@ -56,6 +62,7 @@ def loadConfig(cliArgs) :
   if cliArgs.debug :
     config['debug'] = cliArgs.debug
 
+  if cliArgs.config is None : cliArgs.config = []
   unLoadedConfig = cliArgs.config.copy()
   unLoadedConfig.insert(0,'tex2texConfig.yaml')
   print(yaml.dump(unLoadedConfig))
@@ -74,7 +81,13 @@ def loadConfig(cliArgs) :
 
   if cliArgs.mappings :
     config['mappingDirs'] = cliArgs.mappings
+  if os.path.exists('mappings') and os.path.isdir('mappings') :
+    config['mappingDirs'].insert(0, 'mappings')
   config['mappingDirs'].insert(0, 'tex2tex/mappings/common')
+
+  if not cliArgs.outputDir : cliArgs.outputDir = '.latex'
+  if not os.path.exists(cliArgs.outputDir) :
+    os.makedirs(cliArgs.outputDir, exist_ok=True)
 
   if config['verbose'] :
     print("--------------------------------------------------------------")

@@ -1,8 +1,11 @@
+from io import StringIO
 
+import os
+import sys
 import yaml
 
 from .loadConfiguration import parseCliArgs, loadConfig, loadMappings
-from .parser import CharStream
+from .parser import CharStream, buildAST
 from .dsl import macroNames
 
 def tex2tex() :
@@ -10,16 +13,26 @@ def tex2tex() :
   config = loadConfig(cliArgs)
   loadMappings(config)
 
-  cStream = CharStream("""
-\This is a test
-%This is another test
-Yet more background
+  print(cliArgs.texFiles)
+  print(yaml.dump(cliArgs.texFiles))
 
-Until the end!
-""")
+  for aTeXPath in cliArgs.texFiles :
+    with open(aTeXPath, 'r') as aTeXFile :
+      aTeXFileStr = aTeXFile.read()
 
-  cStream.scanTokens()
+      cStream = CharStream(aTeXFileStr)
 
-  cStream.tokens.dumpTokens()
+      cStream.scanTokens()
+
+      #cStream.tokens.dumpTokens()
+
+      tSeq = buildAST(cStream.tokens)
+
+      #tSeq.dumpAST()
+
+      with open(
+        os.path.join(cliArgs.outputDir, aTeXPath),
+        'w') as anOutFile:
+        tSeq.writeTeXto(anOutFile)
 
   print("Done!")

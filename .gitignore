@@ -1,3 +1,12 @@
+# Tex2Tex
+.latex
+
+# TeX and ConTeXt
+*.log
+*.pdf
+*.tuc
+
+# PDM
 tmp
 .pdm.toml
 

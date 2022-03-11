@@ -70,6 +70,9 @@ class ItemStream() :
     self.numItems = len(items)
     self.curIndex = 0
 
+  def restart(self) :
+    self.curIndex = 0
+
   def hasMore(self) :
     return self.curIndex < self.numItems
 
@@ -79,9 +82,14 @@ class ItemStream() :
     return self.items[self.curIndex]
 
   def nextItem(self) :
-    print("nextItem[{}] '{}'->'{}'".format(
-      self.curIndex, self.items[self.curIndex], self.items[self.curIndex+1]
-    ))
+    #pNextItem = None
+    #if self.curIndex + 1 < self.numItems : pNextItem = self.items[self.curIndex+1]
+    #print("nextItem[{}]({}) '{}'->'{}'".format(
+    #  self.curIndex,
+    #  self.numItems,
+    #  self.items[self.curIndex],
+    #  pNextItem
+    #))
     if self.numItems <= self.curIndex :
       return None
     anItem = self.items[self.curIndex]
@@ -93,6 +101,10 @@ class ItemStream() :
       return None
     self.curIndex -= 1
     return self.items[self.curIndex]
+
+  def append(self, anItem) :
+    self.items.append(anItem)
+    self.numItems += 1
 
 class CharStream(ItemStream) :
   def __init__(self, text) :
@@ -161,7 +173,7 @@ class TokenStream(ItemStream) :
     super().__init__([])
 
   def addToken(self, aToken) :
-    self.items.append(aToken)
+    self.append(aToken)
 
   def dumpTokens(self) :
     print("----------------------------------------------------")
@@ -175,6 +187,10 @@ class ASTSequence() :
 
   def addToken(self, aToken) :
     self.items.append(aToken)
+
+  def dumpAST(self) :
+    for anItem in self.items :
+      print(type(anItem))
 
   def writeTeXto(self, aFile) :
     for anItem in self.items :
@@ -195,7 +211,8 @@ class ASTCommand() :
 
   def writeTeXto(self, aFile) :
     self.command.writeTeXto(aFile)
-    self.sequence.writeTeXto(aFile)
+    if self.sequence is not None :
+      self.sequence.writeTeXto(aFile)
 
 class ASTGroup() :
   def __init__(self, startToken, aSequence) :
@@ -281,12 +298,13 @@ def buildGroup(startToken, tokens) :
 
 def buildInnerSequence(tSeq, numArgs, areOptional, endGroup, tokens) :
   theArgs = []
-  while 0 < len(tokens) :
+  while tokens.hasMore() :
     if endGroup is None and   \
       numArgs is not None and \
       numArgs <= len(theArgs) :
       return theArgs
-    curToken = tokens.pop(0)
+    curToken = tokens.nextItem()
+    if curToken is None : raise Exception("curToken should NOT be None")
     if isinstance(curToken, TokenCommand) :
       tSeq.addToken(buildCommand(curToken, tokens))
     elif isinstance(curToken, TokenStartGroup) :

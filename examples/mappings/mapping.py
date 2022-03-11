@@ -6,7 +6,7 @@ from tex2tex.dsl import Environments as e
 m.usebtxdataset(
   open='[',
   close=']',
-  numArgs=1
+  numOptArgs=1
 )
 
 m.usemodule()
@@ -16,7 +16,7 @@ m.diSimpEnvironment()
 m.diSimpComonent()
 
 e.diSimplexComponent(
-  numArgs=1
+  numReqArgs=1
 )
 
 e.group(
@@ -27,7 +27,7 @@ e.group(
 m.placefigure(
   open='[{',
   close=']}',
-  numArgs=3,
+  numReqArgs=3,
 )
 
 e.MPcode(
@@ -38,5 +38,5 @@ e.MPcode(
 e.itemize(
   open='[',
   close=']',
-  numArgs=1
+  numOptArgs=1
 )
